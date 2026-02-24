@@ -1,0 +1,7 @@
+# Core dependencies for the MCP server
+certifi
+fastmcp
+google-auth
+pip
+requests
+uvicorn

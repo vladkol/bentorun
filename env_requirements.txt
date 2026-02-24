@@ -1,0 +1,28 @@
+# Sandbox Environment Template Dependencies
+# This file is used to install core dependencies in the sandbox environment.
+aiohttp
+beautifulsoup4
+certifi
+fpdf
+google-cloud-secret-manager
+google-cloud-storage
+google-genai
+httpx
+imageio
+jinja2
+lxml
+matplotlib
+numpy
+pandas
+pillow
+pydantic
+PyPDF2
+python-dateutil
+python-dotenv
+pyyaml
+requests
+scipy
+seaborn
+SQLAlchemy
+urllib3
+wikipedia
