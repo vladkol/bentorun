@@ -19,7 +19,7 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 # If deployed to Cloud Run, change it to the service address,
-# like "https://mcp-python-sandbox-PROJECT_NUMBER.REGION.run.app/mcp"
+# like "https://mcp-bentorun-python-PROJECT_NUMBER.REGION.run.app/mcp"
 SERVER_URL = "http://localhost:8080/mcp"
 
 code = """

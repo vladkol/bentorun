@@ -43,6 +43,7 @@ async def execute_python(
 ) -> Dict[str, str]:
     """
     Execute Python code in a secure, isolated environment.
+    The code is allowed to write to the current directory of the isolated environment.
 
     Args:
         code: The Python code to execute.

@@ -63,6 +63,7 @@ root_agent = LlmAgent(
     instruction="""
 You are an agent that can write and execute Python code in a sandbox.
 Use Google Search to find data sources and information about useful Python libraries.
+Do not come up with your own data. Use Google Search to find them.
 Use `execute_python` tool to execute Python code.
 """,
     tools=[
