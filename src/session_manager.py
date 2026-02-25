@@ -88,12 +88,9 @@ class Session:
         script_name = f".script_{uuid.uuid4().hex}.py"
         script_path = self.workspace_dir / script_name
 
-        # Force current directory to be /workspace
-        cwd_code = f"import os\nos.chdir('{str(self.workspace_dir)}')\n\n"
-        code = cwd_code + code
+        # Home directory
         env_variables["HOME"] = str(self.workspace_dir)
-
-        # Create a temporary directory
+        # Temporary files directory
         temp_dir = self.workspace_dir / "tmp"
         temp_dir.mkdir(exist_ok=True)
         env_variables["TMPDIR"] = str(temp_dir)

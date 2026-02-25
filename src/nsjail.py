@@ -60,7 +60,6 @@ class NSJailWrapper:
             self.nsjail_path,
             "-Mo",
             "--user", "1000", "--group", "1000", # Map to sandboxuser
-            # "--chroot", "/", # Chroot to root (since we want to use the system's python)
 
             # Log to the duplicated FD
             "--log_fd", str(log_fd),
@@ -70,7 +69,8 @@ class NSJailWrapper:
             "--disable_clone_newnet",
 
             # Bind mount workspace as RW
-            "-B", f"{workspace_path}:/{workspace_path}",
+            "-B", f"{workspace_path}:{workspace_path}",
+            "--cwd", f"{workspace_path}",
 
             # Limits
             "--rlimit_as", str(max_memory),

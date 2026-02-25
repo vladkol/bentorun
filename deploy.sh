@@ -105,5 +105,5 @@ gcloud run deploy $SERVICE_NAME \
     --set-env-vars="GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}" \
     --set-env-vars="GOOGLE_CLOUD_REGION=${GOOGLE_CLOUD_REGION}"
 
-echo "Deployment complete. URL:"
-gcloud run services describe $SERVICE_NAME --region $GOOGLE_CLOUD_REGION --format 'value(status.url)'
+SERVICE_URL=$(gcloud run services describe $SERVICE_NAME --region $GOOGLE_CLOUD_REGION --format 'value(status.url)')
+echo "Deployment complete. MCP Server URL: ${SERVICE_URL}/mcp"
