@@ -92,6 +92,7 @@ SERVICE_NAME="mcp-bentorun-python"
 # Deploy to Cloud Run
 gcloud run deploy $SERVICE_NAME \
     --source . \
+    --project "${GOOGLE_CLOUD_PROJECT}" \
     --region $GOOGLE_CLOUD_REGION \
     --service-account "${CLOUD_RUN_SERVICE_ACCOUNT}" \
     --allow-unauthenticated \
@@ -105,5 +106,5 @@ gcloud run deploy $SERVICE_NAME \
     --set-env-vars="GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}" \
     --set-env-vars="GOOGLE_CLOUD_REGION=${GOOGLE_CLOUD_REGION}"
 
-SERVICE_URL=$(gcloud run services describe $SERVICE_NAME --region $GOOGLE_CLOUD_REGION --format 'value(status.url)')
+SERVICE_URL=$(gcloud run services describe $SERVICE_NAME --project $GOOGLE_CLOUD_PROJECT --region $GOOGLE_CLOUD_REGION --format 'value(status.url)')
 echo "Deployment complete. MCP Server URL: ${SERVICE_URL}/mcp"
