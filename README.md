@@ -112,11 +112,22 @@ There are 2 main reasons why we chose nsjail for this project:
 
 ### Deploy to Cloud Run
 
+1. Make sure you have `gcloud` CLI installed and configured.
+2. Authenticate with Google Cloud:
+
+```bash
+gcloud auth login --update-adc
+```
+
+3. Copy `env.template` to `.env`, and set `GOOGLE_CLOUD_PROJECT` to your Google Cloud Project Id.
+
+4. Deploy the MCP server:
+
 ```bash
 ./deploy.sh
 ```
 
-The script will deploy the MCP server to Cloud Run as `mcp-python-sandbox` service and provide the URL.
+The script will deploy the MCP server to Cloud Run as `mcp-bentorun-python` service and provide the URL.
 
 ### Run in Docker
 
@@ -145,7 +156,7 @@ python3 examples/mcp_client/simple_client.py
     * `GOOGLE_GENAI_USE_VERTEXAI` - set to "true" to use Vertex AI.
     * `GOOGLE_CLOUD_PROJECT` - set to your Google Cloud project Id.
     * `GOOGLE_CLOUD_LOCATION` - Gemini API endpoint location. Keep it `global` if you don't have specific requirements.
-    * `BENTORUN_MCP_URL` - set to your BentoRun MCP URL (e.g. `https://mcp-python-sandbox-PROJECT_NUMBER.REGION.run.app/mcp` or `http://localhost:8080/mcp`)
+    * `BENTORUN_MCP_URL` - set to your BentoRun MCP URL (e.g. `https://mcp-bentorun-python-PROJECT_NUMBER.REGION.run.app/mcp` or `http://localhost:8080/mcp`)
     * `GEMINI_API_KEY` - if you prefer using Gemini API key, set `GOOGLE_GENAI_USE_VERTEXAI` to "false" and `GEMINI_API_KEY` to your Gemini API key.
 * Install ADK requirements:
 
@@ -183,7 +194,7 @@ Add MCP Server to [Gemini CLI](https://geminicli.com/docs/tools/mcp-server/):
 gemini mcp add --transport http bentorun-mcp MCP_SERVER_URL
 ```
 
-> Replace `MCP_SERVER_URL` with your BentoRun MCP URL (e.g. `https://mcp-python-sandbox-PROJECT_NUMBER.REGION.run.app/mcp` or `http://localhost:8080/mcp`)
+> Replace `MCP_SERVER_URL` with your BentoRun MCP URL (e.g. `https://mcp-bentorun-python-PROJECT_NUMBER.REGION.run.app/mcp` or `http://localhost:8080/mcp`)
 
 ## Disclaimer
 
