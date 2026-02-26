@@ -47,13 +47,14 @@ This tool executes Python code in a sandboxed environment. Its parameters are:
 - **code**: The Python code to execute.
 - **packages**: A list of additional PyPI packages to install in the sandbox environment before executing the code.
 - **env_variables**: A dictionary of environment variables to set in the sandbox environment.
-    > For code using Google Cloud libraries, you can pass credentials in 2 ways:
+
+    For code using Google Cloud libraries, you can pass credentials in 2 ways:
     - By passing `CLOUDSDK_AUTH_ACCESS_TOKEN` environment variable
     with the access token from `gcloud auth print-access-token` CLI command.
     - By passing `GOOGLE_APPLICATION_CREDENTIALS` environment variable with the content of the service account key json file.
 
 The tool's instructions explicitly state that any output files should be written to `output` subdirectory.
-Those files are then returned from `execute_python` tool as [Embedded Resources](https://modelcontextprotocol.io/specification/2025-06-18/server/tools#embedded-resources) or [Images](https://modelcontextprotocol.io/specification/2025-06-18/server/tools#image-content). See [`examples/adk/adk_sandbox/agent.py`](examples/adk/adk_sandbox/agent.py) for example of how to use it.
+Such files are processed and returned from `execute_python` tool as [Embedded Resources](https://modelcontextprotocol.io/specification/2025-06-18/server/tools#embedded-resources) or [Images](https://modelcontextprotocol.io/specification/2025-06-18/server/tools#image-content). See [`examples/adk/adk_sandbox/agent.py`](examples/adk/adk_sandbox/agent.py) for example of how to use it.
 
 Those files and installed packages are preserved between executions within the same session.
 Sessions are automatically cleaned up after 10 minutes of inactivity.
