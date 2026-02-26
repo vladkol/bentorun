@@ -95,19 +95,6 @@ Each MCP session is isolated in a separate NsJail sandbox.
 4. **Output**: The output is returned to the client as a JSON object with `stdout` and `stderr` fields
   that contain respective outputs from the execution.
 
-## Why not gVisor?
-
-You might ask: *Why use nsjail instead of a container runtime like gVisor?*
-
-[**gVisor**](https://gvisor.dev/) is a great tool for container sandboxing.
-There is an existing project that allows you to run isolated code with gVisor in Cloud Run: [GoogleCloudPlatform/cloud-run-sandbox](https://github.com/GoogleCloudPlatform/cloud-run-sandbox).
-
-There are 2 main reasons why we chose nsjail for this project:
-
-1.  **Performance & Overhead**: Spawning a nested container or VM (like gVisor) for every short-lived Python script adds significant latency and resource overhead. `nsjail` uses Linux namespaces which are extremely lightweight, making it ideal for high-frequency, short-duration tasks typical of an MCP server.
-
-2.  **Complexity**: Running gVisor or Docker-in-Docker inside Cloud Run is technically complex, often requires privileged flags (which reduce security or aren't supported), and complicates the deployment. `nsjail` operates as a standard Linux process using user namespaces, fitting naturally into modern container environments.
-
 ## Running the BentoRun MCP Server
 
 ### Deploy to Cloud Run
