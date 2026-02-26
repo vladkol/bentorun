@@ -12,68 +12,63 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Stage 1: Builder
+# Downloads and verifies runsc
 FROM python:3.13-slim-bookworm AS builder
 
-# Install build dependencies for nsjail
-# Added g++ as requested by user
 RUN apt-get update && apt-get install -y \
-    bison \
-    flex \
-    libprotobuf-dev \
-    libnl-route-3-dev \
-    protobuf-compiler \
-    gcc \
-    g++ \
-    make \
-    git \
-    pkg-config \
+    wget \
+    curl \
+    xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Build nsjail
-RUN git clone https://github.com/google/nsjail.git /nsjail \
-    && cd /nsjail \
-    && make \
-    && mv nsjail /usr/local/bin/
+WORKDIR /tmp
+RUN set -e; \
+    URL=https://storage.googleapis.com/gvisor/releases/release/latest/x86_64; \
+    wget ${URL}/runsc ${URL}/runsc.sha512; \
+    sha512sum -c runsc.sha512; \
+    chmod a+rx runsc
 
-# Final stage
+# Stage 2: Final Image
 FROM python:3.13-slim-bookworm
 
-# Copy nsjail binary from builder
-COPY --from=builder /usr/local/bin/nsjail /usr/local/bin/nsjail
+# Install runtime dependencies
+# Keep curl, wget, iptables, procps, xz-utils as requested
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    iptables \
+    procps \
+    xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy runsc from builder
+COPY --from=builder /tmp/runsc /usr/local/bin/
 
 # Copy uv from official image
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Install runtime dependencies for nsjail (libprotobuf, libnl)
-# Combine with user setup to save layers
-RUN apt-get update && apt-get install -y \
-    libprotobuf32 \
-    libnl-route-3-200 \
-    curl \
-    && rm -rf /var/lib/apt/lists/* \
-    && useradd -m -u 1000 -s /bin/bash sandboxuser
+# Create sandbox user
+RUN useradd -m -u 1000 -s /bin/bash sandboxuser
 
 # Create template virtual environment
-# Copy requirements files first to cache them
 WORKDIR /app
 COPY env_requirements.txt requirements.txt /app/
 
-# Install template dependencies
-# Combine uv commands where possible, but here we have two distinct environments:
-# 1. /opt/template_venv for the sandboxed sessions
-# 2. System python for the MCP server itself
+# Install dependencies and setup environment
 RUN uv venv /opt/template_venv \
     && uv pip install --python /opt/template_venv -U -r env_requirements.txt \
-    # Clear uv cache to save space
     && uv cache clean \
-    # Install system dependencies for the app
     && uv pip install --no-cache --system -U -r requirements.txt \
-    # Create workspace and set permissions
     && mkdir -p /workspace \
     && chown 1000:1000 /workspace
 
 # Copy application code
 COPY src /app/src
+
+# Optimization: Compile bytecode
+# Compiles application code, template venv, and system python libraries
+RUN python3 -m compileall /app/src /opt/template_venv /usr/local/lib/python3.13
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \

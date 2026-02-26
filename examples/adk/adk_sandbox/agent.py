@@ -12,10 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import base64
 import os
 import subprocess
-from google.adk.agents import LlmAgent
+import uuid
+from typing import Dict, Any
 
+from google.adk.agents import LlmAgent
+from google.adk.tools.tool_context import ToolContext
+from google.adk.tools.base_tool import BaseTool
 from google.adk.tools.mcp_tool.mcp_toolset import (
     McpToolset,
     StreamableHTTPConnectionParams,
@@ -24,6 +29,8 @@ from google.adk.tools.google_search_agent_tool import (
     create_google_search_agent,
     GoogleSearchAgentTool
 )
+
+from google.genai.types import Blob, Part
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -39,7 +46,8 @@ def get_bentorun_mcp_tools():
         connection_params=StreamableHTTPConnectionParams(
             url=server_url,
             timeout=30,
-        )
+        ),
+        use_mcp_resources=True
     )
     print("MCP Toolset created successfully.")
     return tools
@@ -55,6 +63,50 @@ def get_google_cloud_project():
     Value can be used with `execute_python` tool as `GOOGLE_CLOUD_PROJECT` in `env_variables`.
     """
     return subprocess.check_output(["gcloud", "config", "get-value", "project", "-q"]).decode().strip()
+
+async def after_tool_callback(
+    tool: BaseTool,
+    args: Dict[str, Any],
+    tool_context: ToolContext,
+    tool_response: Dict
+):
+    if tool.name != "execute_python" or "content" not in tool_response:
+        return
+    tool_response = tool_response["content"]
+    if isinstance(tool_response, list):
+        for response in tool_response:
+            if response["type"] == "image":
+                await tool_context.save_artifact(
+                    filename=f"image-{uuid.uuid4()}",
+                    artifact=Part(
+                        inline_data=Blob(
+                            data=base64.b64decode(response["data"]),
+                            mime_type=response["mimeType"]
+                        )
+                    )
+                )
+            elif response["type"] == "resource":
+                file_resource = response["resource"]
+                resource_data = file_resource.get(
+                    "blob",
+                    file_resource.get("text")
+                )
+                if resource_data:
+                    if not file_resource["mimeType"].startswith("text/"):
+                        resource_data = base64.b64decode(resource_data)
+                    await tool_context.save_artifact(
+                        filename=f"resource-{uuid.uuid4()}",
+                        artifact=Part(
+                            inline_data=Blob(
+                                data=resource_data,
+                                mime_type=file_resource["mimeType"]
+                        )
+                    )
+                )
+
+
+
+
 
 # Define the ADK agent, linking the function as a tool
 root_agent = LlmAgent(
@@ -73,5 +125,6 @@ Use `execute_python` tool to execute Python code.
         get_bentorun_mcp_tools(), # for BentoRun MCP
         get_google_auth_token, # for Google Cloud authentication
         get_google_cloud_project # for Google Cloud project
-    ]
+    ],
+    after_tool_callback=after_tool_callback
 )

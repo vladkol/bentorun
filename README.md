@@ -4,41 +4,30 @@ A Model Context Protocol (MCP) server that provides a secure isolated environmen
 
 ## Overview
 
-BentoRun Python MCP allows AI Agents to execute Python code safely inside lightweight sandboxes in Docker or [Google Cloud Run](https://cloud.google.com/run). It uses a rigorous sandboxing approach to ensure that executed code cannot interfere with the host system or the MCP server itself, while still providing necessary access to the internet and specific libraries.
+BentoRun Python MCP allows AI Agents to execute Python code safely inside lightweight sandboxes in [Google Cloud Run](https://cloud.google.com/run). It uses a rigorous sandboxing approach to ensure that executed code cannot interfere with the host system or the MCP server itself, while still providing necessary access to the internet and specific libraries.
 
 Each MCP session is isolated in a separate sandbox.
 
 ![BentoRun Python MCP Diagram](images/mcp-bentorun.png)
 
-## Sandbox with NsJail
+## Sandbox with gVisor
 
-We use [**NsJail**](https://nsjail.dev/), a lightweight process isolation tool by Google, to create a secure environment for every code execution. It utilizes Linux namespaces, cgroups, rlimits and seccomp-bpf syscall filters, leveraging the Kafel BPF language for enhanced security.
+We use [**gVisor**](https://gvisor.dev/), an application kernel for containers, to create a secure environment for every code execution. It provides an additional layer of isolation between running applications and the host operating system.
 
-NsJail was originally built by Google's security team for Capture The Flag (CTF) competitions, where the entire goal is to let strangers run malicious code on your server without them breaking out.
+gVisor was built by Google to provide strong isolation for multi-tenant workloads. It implements a substantial portion of the Linux system surface, allowing untrusted code to run safely without direct access to the host kernel.
 
-NsJail uses the following Linux features to create a secure isolated execution environment:
+gVisor uses the following features to create a secure isolated execution environment:
 
-### 1. Namespaces (The "What I See" Filter)
+### 1. Application Kernel (The "Sentry")
+gVisor intercepts application system calls and handles them in a user-space kernel called the Sentry. The Sentry implements the Linux kernel API, but is written in Go and memory-safe. This means:
+* **Attack Surface Reduction**: The application doesn't talk directly to the host kernel.
+* **Defense in Depth**: Even if the application compromises the Sentry, it is still isolated from the host.
 
-Namespaces tell a process that the world is much smaller than it actually is. NsJail uses these to:
+### 2. Filesystem Proxy (The "Gofer")
+File operations are proxied through a separate process called the Gofer. This ensures that the application only accesses files it is explicitly allowed to see, enforcing strict isolation boundaries.
 
-* **PID isolation:** The process thinks it’s the only thing running (it sees itself as PID 1) and cannot see or "kill" other processes on your machine.
-* **Mount isolation:** You can give the process a "fake" root directory. It won't even know your `/home` or `/etc` folders exist unless you explicitly "mount" them into the jail.
-* **Network isolation:** You can completely disconnect the process from the internet or give it a dedicated virtual network interface. In our case, we share the network namespace with the host container (`--disable_clone_newnet`) to allow code to use the internet.
-
-### 2. Cgroups (The "How Much I Can Take" Limiter)
-
-Control Groups (cgroups) manage hardware resources. Nsjail lets you set hard ceilings so a buggy or malicious script doesn't crash your host:
-
-* **Memory:** "You can only use 512MB of RAM."
-* **CPU:** "You can only use 10% of one core."
-* **PIDs:** "You can only spawn 5 child processes" (prevents "fork bombs").
-
-### 3. Seccomp-bpf (The "What I'm Allowed to Ask" Guard)
-
-This is the most powerful security feature. Every time a program wants to do something (read a file, open a socket, get the time), it asks the Linux kernel via a **syscall**.
-
-* Nsjail allows you to create an allowlist of syscalls: "This process can `read` and `write`, but it is forbidden from using `execve` (running other programs) or `socket` (opening network connections)."
+### 3. OCI Compatibility
+gVisor integrates seamlessly with OCI (Open Container Initiative) runtimes. We use `runsc` (the gVisor runtime) to spin up lightweight, ephemeral sandboxes for each execution, managing resources via standard container controls.
 
 ## Sandbox Environment Template
 
@@ -47,7 +36,7 @@ We use a sandbox environment template to ensure that executed code runs in a con
 If you expect your code to often require certain dependencies, customize the sandbox environment by modifying `env_requirements.txt` file
 and by adding additional dependencies to the `Dockerfile`.
 
-Depending on complexity of the code, you may also need to extend the list of system mounts by modifying `KNOWN_SYSTEM_MOUNTS` list in `src/nsjail.py` file.
+Depending on complexity of the code, you may also need to extend the list of system mounts by modifying `KNOWN_SYSTEM_MOUNTS` list in `src/sandbox.py` file.
 
 ## MCP Server Tools
 
@@ -63,6 +52,12 @@ This tool executes Python code in a sandboxed environment. Its parameters are:
     with the access token from `gcloud auth print-access-token` CLI command.
     - By passing `GOOGLE_APPLICATION_CREDENTIALS` environment variable with the content of the service account key json file.
 
+The tool's instructions explicitly state that any output files should be written to `output` subdirectory.
+Those files are then returned from `execute_python` tool as [Embedded Resources](https://modelcontextprotocol.io/specification/2025-06-18/server/tools#embedded-resources) or [Images](https://modelcontextprotocol.io/specification/2025-06-18/server/tools#image-content). See [`examples/adk/adk_sandbox/agent.py`](examples/adk/adk_sandbox/agent.py) for example of how to use it.
+
+Those files and installed packages are preserved between executions within the same session.
+Sessions are automatically cleaned up after 10 minutes of inactivity.
+
 ### Key Isolation Features
 
 1.  **Filesystem Isolation**:
@@ -71,21 +66,19 @@ This tool executes Python code in a sandboxed environment. Its parameters are:
     -   A temporary workspace is bind-mounted as the *only* writable location.
     -   This prevents the executed code from modifying system files, installing persistent malware, or accessing the MCP server's sensitive files.
 
-2.  **Resource Limits** (Enforced via cgroups/rlimits):
-    -   **Memory**: Limited to 512MB by default to prevent OOM attacks or leaks.
-    -   **CPU Time**: Execution time is strictly limited (default 60s) to prevent infinite loops from locking up resources.
-    -   **Output Size**: Stdout/Stderr is capped to prevent log flooding.
+2.  **Resource Limits** (Enforced via OCI/cgroups):
+    -   **Memory**: Limited to 512MB by default via `runsc` configuration to prevent OOM attacks or leaks.
+    -   **CPU Time**: Execution time is strictly limited (default 60s) via `RLIMIT_CPU` to prevent infinite loops from locking up resources.
 
 3.  **Network Access**:
-    -   The sandbox shares the network namespace with the host container (`--disable_clone_newnet`).
+    -   The sandbox can share the network namespace with the host container (configurable).
     -   This allows the code to fetch data from the internet (e.g., pip install packages, make API calls) which is often required for useful tasks.
-    -   *Security Note*: Since we are running inside a container (Cloud Run/Docker) that already has its own network policies, this is an acceptable trade-off. In Cloud Run, we make sure to use a "permissionless" Service Account, so the code cannot access any Google Cloud resources unless given an explicit authentication token as part of the code execution request.
+    -   *Security Note*: Since we are running inside a container (Cloud Run) that already has its own network policies, this is an acceptable trade-off. In Cloud Run, we make sure to use a "permissionless" Service Account, so the code cannot access any Google Cloud resources unless given an explicit authentication token as part of the code execution request.
 
 4.  **User Isolation**:
-    -   Code runs as a dedicated non-privileged user (`sandboxuser`, uid:1000).
-    -   This prevents privilege escalation within the container even if the code manages to escape the sandbox.
+    -   Code runs as a dedicated non-privileged user (`sandboxuser`, uid:1000) inside the sandbox which makes it even harder to escape the sandbox.
 
-Each MCP session is isolated in a separate NsJail sandbox.
+Each MCP session is executed in a separate, ephemeral gVisor sandbox.
 
 ## Code Execution Flow
 
@@ -95,22 +88,9 @@ Each MCP session is isolated in a separate NsJail sandbox.
 4. **Output**: The output is returned to the client as a JSON object with `stdout` and `stderr` fields
   that contain respective outputs from the execution.
 
-## Why not gVisor?
+## Deploying and Running the BentoRun MCP Server
 
-You might ask: *Why use nsjail instead of a container runtime like gVisor?*
-
-[**gVisor**](https://gvisor.dev/) is a great tool for container sandboxing.
-There is an existing project that allows you to run isolated code with gVisor in Cloud Run: [GoogleCloudPlatform/cloud-run-sandbox](https://github.com/GoogleCloudPlatform/cloud-run-sandbox).
-
-There are 2 main reasons why we chose nsjail for this project:
-
-1.  **Performance & Overhead**: Spawning a nested container or VM (like gVisor) for every short-lived Python script adds significant latency and resource overhead. `nsjail` uses Linux namespaces which are extremely lightweight, making it ideal for high-frequency, short-duration tasks typical of an MCP server.
-
-2.  **Complexity**: Running gVisor or Docker-in-Docker inside Cloud Run is technically complex, often requires privileged flags (which reduce security or aren't supported), and complicates the deployment. `nsjail` operates as a standard Linux process using user namespaces, fitting naturally into modern container environments.
-
-## Running the BentoRun MCP Server
-
-### Deploy to Cloud Run
+> You need a [Google Cloud Project](https://console.cloud.google.com/) with billing enabled to deploy the MCP server.
 
 1. Make sure you have `gcloud` CLI installed and configured.
 2. Authenticate with Google Cloud:
@@ -128,15 +108,6 @@ gcloud auth login --update-adc
 ```
 
 The script will deploy the MCP server to Cloud Run as `mcp-bentorun-python` service and provide the URL.
-
-### Run in Docker
-
-You can also use [`podman`](https://podman.io/) instead of `docker`.
-
-```bash
-docker build -t bentorun-mcp .
-docker run -p 8080:8080 -e PORT=8080 --privileged bentorun-mcp
-```
 
 ## Examples
 
@@ -156,7 +127,7 @@ python3 examples/mcp_client/simple_client.py
     * `GOOGLE_GENAI_USE_VERTEXAI` - set to "true" to use Vertex AI.
     * `GOOGLE_CLOUD_PROJECT` - set to your Google Cloud project Id.
     * `GOOGLE_CLOUD_LOCATION` - Gemini API endpoint location. Keep it `global` if you don't have specific requirements.
-    * `BENTORUN_MCP_URL` - set to your BentoRun MCP URL (e.g. `https://mcp-bentorun-python-PROJECT_NUMBER.REGION.run.app/mcp` or `http://localhost:8080/mcp`)
+    * `BENTORUN_MCP_URL` - set to your BentoRun MCP URL (e.g. `https://mcp-bentorun-python-PROJECT_NUMBER.REGION.run.app/mcp`)
     * `GEMINI_API_KEY` - if you prefer using Gemini API key, set `GOOGLE_GENAI_USE_VERTEXAI` to "false" and `GEMINI_API_KEY` to your Gemini API key.
 * Install ADK requirements:
 
@@ -194,7 +165,7 @@ Add MCP Server to [Gemini CLI](https://geminicli.com/docs/tools/mcp-server/):
 gemini mcp add --transport http bentorun-mcp MCP_SERVER_URL
 ```
 
-> Replace `MCP_SERVER_URL` with your BentoRun MCP URL (e.g. `https://mcp-bentorun-python-PROJECT_NUMBER.REGION.run.app/mcp` or `http://localhost:8080/mcp`)
+> Replace `MCP_SERVER_URL` with your BentoRun MCP URL (e.g. `https://mcp-bentorun-python-PROJECT_NUMBER.REGION.run.app/mcp`)
 
 ## Disclaimer
 

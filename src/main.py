@@ -1,8 +1,12 @@
-from fastmcp import FastMCP, Context
-import logging
 import asyncio
+import json
+import logging
 import os
-from typing import Dict
+from typing import Union, List
+
+from fastmcp import FastMCP, Context
+from mcp.types import TextContent
+from fastmcp.utilities.types import File, Image
 
 from session_manager import SessionManager
 
@@ -32,6 +36,11 @@ async def lifespan(server: FastMCP):
 mcp = FastMCP(
     "Python Sandbox",
     lifespan=lifespan,
+    instructions="""
+    Python code execution engine.
+    Any files must be written to `output` sub-directory of the current directory to be returned.
+    `TMPDIR` env variable points to the temporry directory.
+    """
 )
 
 @mcp.tool()
@@ -40,10 +49,11 @@ async def execute_python(
     code: str,
     packages: list[str] = [],
     env_variables: dict[str, str] = {}
-) -> Dict[str, str]:
+) -> List[Union[TextContent, File, Image]]:
     """
     Execute Python code in a secure, isolated environment.
     The code is allowed to write to the current directory of the isolated environment.
+    Any files must be written to `output` sub-directory of the current directory to be returned.
 
     Args:
         code: The Python code to execute.
@@ -59,6 +69,13 @@ async def execute_python(
     """
     logger.info(f"Received execution request for session {ctx.session_id}")
 
+    results: List[Union[TextContent, File, Image]] = []
+    text_output = {
+        "stdout": [],
+        "stderr": []
+    }
+    images = []
+    files = []
     try:
 
         session = session_manager.get_session(ctx.session_id)
@@ -87,23 +104,64 @@ async def execute_python(
             code,
             env_variables=env_variables,
         ):
-            lines.append(event)
+            if event[0] in ["stdout", "stderr"]:
+                lines.append(event)
+            elif event[0].rsplit(".", 1)[1].lower() in [
+                    "jpg",
+                    "png",
+                    "jpeg",
+                    "gif",
+                    "bmp",
+                    "webp",
+                    "tiff",
+                    "svg"
+                ]:
+                file_type = event[0].rsplit('.', 1)[1].lower()
+                if file_type == "svg":
+                    file_type = "svg+xml"
+                elif file_type == "jpg":
+                    file_type = "jpeg"
+                images.append(Image(
+                    # path=event[0],
+                    data=event[1], # type: ignore
+                    format=file_type
+                ))
+            else:
+                files.append(
+                    File(
+                        # path=event[0],
+                        data=event[1], # type: ignore
+                    )
+                )
 
         logger.info(
             "Execution finished",
             extra={"session": ctx.session_id}
         )
-        output = {}
-        output["stdout"] = "\n".join([line[1] for line in lines if line[0] == "stdout"])
-        output["stderr"] = "\n".join([line[1] for line in lines if line[0] == "stderr"])
-        return output
+        text_output["stdout"] = "\n".join( # type: ignore
+            [line[1] for line in lines if line[0] == "stdout"]
+        )
+        text_output["stderr"] = "\n".join( # type: ignore
+            [line[1] for line in lines if line[0] == "stderr"]
+        )
 
     except Exception as e:
         logger.error(
             f"Error executing code: {e}",
-            extra={"session": ctx.session_id}
+            extra={"session": ctx.session_id},
+            exc_info=True
         )
-        return {"stderr": f"Error: {str(e)}"}
+        text_output["stderr"].append(f"Error: {str(e)}")
+    results.append(
+        TextContent(
+            text=json.dumps(text_output),
+            type="text"
+        )
+    )
+    results.extend(images)
+    results.extend(files)
+
+    return results
 
 if __name__ == "__main__":
     asyncio.run(

@@ -1,14 +1,15 @@
 import shutil
 import time
 import asyncio
+import datetime
 import logging
 import subprocess
 from pathlib import Path
 import tempfile
 import json
-from typing import Dict, AsyncGenerator
+from typing import AsyncGenerator, Dict, Tuple, Union
 
-from nsjail import NSJailWrapper
+from sandbox import SandboxWrapper
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +22,11 @@ class Session:
         self.venv_dir = self.workspace_dir / "venv"
         self.workspace_dir = Path(f"/tmp/session_{session_id}")
         self.venv_dir = self.workspace_dir / "venv"
+        self.temp_dir = self.workspace_dir / "tmp"
+        self.output_dir = self.workspace_dir / "output"
+        self.session_output_files = {}
         self.last_active = time.time()
-        self.nsjail = NSJailWrapper()
+        self.sandbox = SandboxWrapper()
 
     def touch(self):
         self.last_active = time.time()
@@ -31,6 +35,8 @@ class Session:
         if not self.workspace_dir.exists():
             logger.info(f"Creating workspace for session {self.session_id}")
             self.workspace_dir.mkdir(parents=True, exist_ok=True)
+            self.temp_dir.mkdir(exist_ok=True)
+            self.output_dir.mkdir(exist_ok=True)
 
             # Create a fresh, lightweight venv (uses symlinks for python/stdlib)
             subprocess.check_call(
@@ -38,6 +44,14 @@ class Session:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL
             )
+
+            # Fix permissions: The session manager runs as root, but the sandbox runs as uid 1000.
+            # We must ensure the workspace is owned by 1000.
+            # Recursive chown
+            for path in [self.workspace_dir]:
+                shutil.chown(path, user=1000, group=1000)
+                for item in path.rglob("*"):
+                    shutil.chown(item, user=1000, group=1000)
 
             # Link the template venv's packages via a .pth file
             template_path = Path(TEMPLATE_VENV_PATH)
@@ -79,7 +93,7 @@ class Session:
         self,
         code: str,
         env_variables: dict[str, str] = {},
-    ) -> AsyncGenerator[tuple[str, str], None]:
+    ) -> AsyncGenerator[Tuple[str, Union[str, bytes]], None]:
         temp_cred_path = None
         self.touch()
 
@@ -91,9 +105,9 @@ class Session:
         # Home directory
         env_variables["HOME"] = str(self.workspace_dir)
         # Temporary files directory
-        temp_dir = self.workspace_dir / "tmp"
-        temp_dir.mkdir(exist_ok=True)
-        env_variables["TMPDIR"] = str(temp_dir)
+        env_variables["TMPDIR"] = str(self.temp_dir)
+        # Output files directory
+        env_variables["OUTPUT_DIR"] = str(self.output_dir)
 
         # Work on env variables
         if (
@@ -144,12 +158,12 @@ google.auth.default = __mock_default
             # Write code to file
             script_path.write_text(code)
 
-            # Execute script using nsjail
+            # Execute script using sandbox
             python_executable = self.workspace_dir / "venv" / "bin" / "python3"
             cmd = [str(python_executable), str(script_path)]
 
-            # Note: nsjail.run_command is now async
-            process = await self.nsjail.run_command(
+            # Note: sandbox.run_command is now async
+            process = await self.sandbox.run_command(
                 cmd=cmd,
                 workspace_path=str(self.workspace_dir),
                 env_vars=env_variables,
@@ -202,10 +216,36 @@ google.auth.default = __mock_default
             if process.returncode != 0:
                 yield ("stderr", f"Process exited with code {process.returncode}")
 
+            # Recursively list files in output directory,
+            # with "keys" being the relative path from output directory.
+            # Only include files that were created/modified after the last execution.
+            for file_path in self.output_dir.rglob("*"):
+                if file_path.is_file():
+                    relative_file_path = str(
+                        file_path.relative_to(self.output_dir)
+                    )
+                    file_m_time = datetime.datetime.fromtimestamp(
+                        file_path.stat().st_mtime,
+                        tz=datetime.timezone.utc
+                    )
+                    if (
+                        relative_file_path in self.session_output_files
+                        and self.session_output_files[
+                            relative_file_path
+                        ] >= file_m_time
+                    ):
+                        continue
+                    self.session_output_files[relative_file_path] = file_m_time
+                    yield (
+                        str(file_path.relative_to(self.output_dir)),
+                        file_path.read_bytes()
+                    )
+
         except Exception as e:
             logger.error(f"Error during execution: {e}")
             yield ("stderr", f"ERROR: {e}")
         finally:
+            self.touch()
             # Cleanup script
             if temp_cred_path:
                 Path(temp_cred_path).unlink(missing_ok=True)
