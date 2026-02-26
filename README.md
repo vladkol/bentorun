@@ -144,6 +144,8 @@ adk web examples/adk
 
 * Open [http://127.0.0.1:8000](http://127.0.0.1:8000) to interact with the agent.
 
+![ADK Agent Example](images/adk-web-screenshot.jpg)
+
 ## Using BentoRun MCP with Gemini CLI
 
 Add MCP Server to [Gemini CLI](https://geminicli.com/docs/tools/mcp-server/):
