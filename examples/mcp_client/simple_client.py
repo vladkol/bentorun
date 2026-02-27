@@ -15,6 +15,9 @@
 import asyncio
 import datetime
 import json
+import subprocess
+
+import httpx
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
@@ -29,7 +32,17 @@ print(f"Hello World from {socket.gethostname()}")
 async def run_code():
     print(f"Connecting to {SERVER_URL}...")
     try:
-        async with streamable_http_client(SERVER_URL) as streams:
+        id_token = _get_google_cloud_identity_token(SERVER_URL)
+        httpx_client = httpx.AsyncClient(
+            headers={
+                "Authorization": f"Bearer {id_token}"
+            },
+            timeout=60.0
+        )
+        async with streamable_http_client(
+            SERVER_URL,
+            http_client=httpx_client
+        ) as streams:
             async with ClientSession(
                 streams[0],
                 streams[1],
@@ -62,6 +75,21 @@ async def run_code():
 
     except Exception as e:
         print(f"Error during verification: {e}")
+
+
+def _get_google_cloud_identity_token(audience: str) -> str:
+    from google.oauth2 import id_token
+    from google.auth.transport import requests
+    try:
+        token = id_token.fetch_id_token(requests.Request(), audience=audience)
+    except Exception as e:
+        token = subprocess.check_output(
+            ["gcloud", "auth", "print-identity-token", "-q"]
+        ).decode().strip()
+    if not token:
+        raise RuntimeError("Could not get identity token.")
+    return token # type: ignore
+
 
 if __name__ == "__main__":
     try:

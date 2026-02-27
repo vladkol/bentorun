@@ -95,7 +95,7 @@ gcloud run deploy $SERVICE_NAME \
     --project "${GOOGLE_CLOUD_PROJECT}" \
     --region $GOOGLE_CLOUD_REGION \
     --service-account "${CLOUD_RUN_SERVICE_ACCOUNT}" \
-    --allow-unauthenticated \
+    --no-allow-unauthenticated \
     --execution-environment gen2 \
     --session-affinity \
     --memory 16Gi \

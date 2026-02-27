@@ -97,7 +97,7 @@ Each MCP session is executed in a separate, ephemeral gVisor sandbox.
 2. Authenticate with Google Cloud:
 
 ```bash
-gcloud auth login --update-adc
+gcloud auth login
 ```
 
 3. Copy `env.template` to `.env`, and set `GOOGLE_CLOUD_PROJECT` to your Google Cloud Project Id.
@@ -111,6 +111,11 @@ gcloud auth login --update-adc
 The script will deploy the MCP server to Cloud Run as `mcp-bentorun-python` service and provide the URL.
 
 ## Examples
+
+> Our MCP Server in Cloud Run is protected with IAM-based authentication.
+Both examples below demonstrate how to authenticate to the MCP server in Cloud Run.
+When the agent's code runs in Google Cloud, it automatically gets credentials using Metadata Service. When running locally, you need to authenticate with `gcloud auth login`.
+In both cases the calling user needs to have **Cloud Run Invoker** (`roles/run.invoker`) role assigned.
 
 ### Simple Client
 
@@ -146,27 +151,56 @@ adk web examples/adk
 
 ![ADK Agent Example](images/adk-web-screenshot.jpg)
 
-## Using BentoRun MCP with Gemini CLI
+## Using BentoRun MCP with Gemini CLI or Claude Code
 
-Add MCP Server to [Gemini CLI](https://geminicli.com/docs/tools/mcp-server/):
+Our MCP Server in Cloud Run is protected with IAM-based authentication. To be able to use the server, you need:
 
-- Manually in `settings.json`:
+1. Have logged in to gcloud CLI with `gcloud auth login`.
+2. Have **Cloud Run Invoker** (`roles/run.invoker`) role assigned to your user (if you deployed the server yourself, most likely you already have it).
+3. Pass your identity token to the MCP server. You can get it by running `gcloud auth print-identity-token -q`.
 
-```json
-{
-  "mcpServers": {
-    "bentorun-mcp": {
-      "url": "MCP_SERVER_URL"
+To automate the last step, we use `mcp-remote` MCP proxy tool with a combination of shell commands.
+
+Add MCP Server to [Gemini CLI](https://geminicli.com/docs/tools/mcp-server/) or [Claude Code](https://docs.anthropic.com/en/docs/tools/mcp):
+
+- Manually in `settings.json` for Gemini CLI or `.mcp.json` for Claude Code:
+
+  ```json
+  {
+    "mcpServers": {
+      "bento-run-mcp": {
+        "env": {
+          "BENTORUN_MCP": "MCP_SERVER_URL"
+        },
+        "command": "/bin/sh",
+        "args": [
+          "-c",
+          "ID_TOKEN=$(gcloud auth print-identity-token -q) && npx -y mcp-remote --header \"Authorization: Bearer $ID_TOKEN\" $BENTORUN_MCP"
+        ]
+      }
     }
   }
-}
-```
+  ```
 
-**or** with CLI:
+- **or** use CLI to add it:
 
-```bash
-gemini mcp add --transport http bentorun-mcp MCP_SERVER_URL
-```
+  For Gemini CLI:
+
+  ```shell
+  gemini mcp add \
+    -e BENTORUN_MCP="MCP_SERVER_URL" \
+    bento-run-mcp \
+    /bin/sh -- -c 'ID_TOKEN=$(gcloud auth print-identity-token -q) && npx -y mcp-remote --header "Authorization: Bearer $ID_TOKEN" $BENTORUN_MCP'
+  ```
+
+  For Claude Code:
+
+  ```shell
+  claude mcp add bento-run-mcp \
+    --scope user \
+    --env BENTORUN_MCP="MCP_SERVER_URL" \
+    -- /bin/sh -c 'ID_TOKEN=$(gcloud auth print-identity-token -q) && npx -y mcp-remote --header "Authorization: Bearer $ID_TOKEN" $BENTORUN_MCP'
+  ```
 
 > Replace `MCP_SERVER_URL` with your BentoRun MCP URL (e.g. `https://mcp-bentorun-python-PROJECT_NUMBER.REGION.run.app/mcp`)
 

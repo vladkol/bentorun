@@ -35,6 +35,19 @@ from google.genai.types import Blob, Part
 from dotenv import load_dotenv
 load_dotenv()
 
+def _get_google_cloud_identity_token(audience: str) -> str:
+    from google.oauth2 import id_token
+    from google.auth.transport import requests
+    try:
+        token = id_token.fetch_id_token(requests.Request(), audience=audience)
+    except Exception as e:
+        token = subprocess.check_output(
+            ["gcloud", "auth", "print-identity-token", "-q"]
+        ).decode().strip()
+    if not token:
+        raise RuntimeError("Could not get identity token.")
+    return token # type: ignore
+
 def get_bentorun_mcp_tools():
     """Gets tools from the BentoRun MCP Server."""
     server_url = os.getenv("BENTORUN_MCP_URL")
@@ -42,10 +55,15 @@ def get_bentorun_mcp_tools():
         raise ValueError("Environment variable BENTORUN_MCP_URL is not set")
     if not server_url.endswith("/mcp"):
         server_url = server_url.strip("/") + "/mcp"
+
     tools = McpToolset(
         connection_params=StreamableHTTPConnectionParams(
             url=server_url,
             timeout=30,
+            headers={
+                "Authorization":
+                    f"Bearer {_get_google_cloud_identity_token(server_url)}"
+            }
         ),
         use_mcp_resources=True
     )
@@ -103,9 +121,6 @@ async def after_tool_callback(
                         )
                     )
                 )
-
-
-
 
 
 # Define the ADK agent, linking the function as a tool
