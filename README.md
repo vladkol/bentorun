@@ -4,7 +4,7 @@ A Model Context Protocol (MCP) server that provides a secure isolated environmen
 
 ## Overview
 
-BentoRun Python MCP allows AI Agents to execute Python code safely inside lightweight sandboxes in [Google Cloud Run](https://cloud.google.com/run). It uses a rigorous sandboxing approach to ensure that executed code cannot interfere with the host system or the MCP server itself, while still providing necessary access to the internet and specific libraries.
+BentoRun Python MCP allows AI Agents to execute Python code safely inside lightweight sandboxes in [Google Cloud Run](https://cloud.google.com/run?utm_campaign=CDR_0xc245fc42_default_b487258444&utm_medium=external&utm_source=blog). It uses a rigorous sandboxing approach to ensure that executed code cannot interfere with the host system or the MCP server itself, while still providing necessary access to the internet and specific libraries.
 
 Each MCP session is isolated in a separate sandbox.
 
@@ -91,7 +91,7 @@ Each MCP session is executed in a separate, ephemeral gVisor sandbox.
 
 ## Deploying and Running the BentoRun MCP Server
 
-> You need a [Google Cloud Project](https://console.cloud.google.com/) with billing enabled to deploy the MCP server.
+> You need a [Google Cloud Project](https://console.cloud.google.com/?utm_campaign=CDR_0xc245fc42_default_b487258444&utm_medium=external&utm_source=blog) with billing enabled to deploy the MCP server.
 
 1. Make sure you have `gcloud` CLI installed and configured.
 2. Authenticate with Google Cloud:
