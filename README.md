@@ -164,7 +164,7 @@ Our MCP Server in Cloud Run is protected with IAM-based authentication. To be ab
 
 To automate the last step, we use `mcp-remote` MCP proxy tool with a combination of shell commands.
 
-Add MCP Server to [Gemini CLI](https://geminicli.com/docs/tools/mcp-server/) or [Claude Code](https://docs.anthropic.com/en/docs/tools/mcp):
+Add MCP Server to [Gemini CLI](https://geminicli.com/docs/tools/mcp-server/) or [Claude Code](https://code.claude.com/docs/en/mcp):
 
 - Manually in `settings.json` for Gemini CLI or `.mcp.json` for Claude Code:
 
