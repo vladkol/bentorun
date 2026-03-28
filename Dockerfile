@@ -36,6 +36,7 @@ FROM python:3.13-slim-bookworm
 # Keep curl, wget, iptables, procps, xz-utils as requested
 RUN apt-get update && apt-get install -y \
     curl \
+    git \
     wget \
     iptables \
     procps \

@@ -23,7 +23,6 @@ KNOWN_SYSTEM_MOUNTS = [
     "/etc/ld.so.cache",
     "/etc/ld.so.conf.d",
     "/dev/urandom",
-    "/dev/null",
     "/dev/zero",
     # We might need more depending on the environment
 ]
@@ -204,6 +203,13 @@ class SandboxWrapper:
             "destination": workspace_path,
             "type": "bind",
             "source": workspace_path,
+            "options": ["rbind", "rw"]
+        })
+        # Mount /dev/null as RW
+        mounts.append({
+            "destination": "/dev/null",
+            "type": "bind",
+            "source": "/dev/null",
             "options": ["rbind", "rw"]
         })
 

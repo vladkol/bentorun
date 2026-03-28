@@ -101,7 +101,7 @@ gcloud run deploy $SERVICE_NAME \
     --memory 16Gi \
     --cpu 8 \
     --concurrency 32 \
-    --timeout 10m \
+    --timeout 60m \
     --port 8080 \
     --set-env-vars="GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}" \
     --set-env-vars="GOOGLE_CLOUD_REGION=${GOOGLE_CLOUD_REGION}"

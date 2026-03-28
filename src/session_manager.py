@@ -269,7 +269,7 @@ class SessionManager:
             now = time.time()
             to_remove = []
             for sid, session in self.sessions.items():
-                if now - session.last_active > 600: # 10 minutes
+                if now - session.last_active > 1200: # 20 minutes
                     logger.info(f"Cleaning up inactive session {sid}")
                     shutil.rmtree(session.workspace_dir, ignore_errors=True)
                     to_remove.append(sid)

@@ -57,7 +57,6 @@ async def execute_python(
 
     Args:
         code: The Python code to execute.
-        session_id: A unique identifier for the session to maintain state.
         packages: List of PyPI packages to ensure are installed.
         env_variables: Environment variables to set in the execution environment.
             For code using Google Cloud libraries,
