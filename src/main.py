@@ -54,7 +54,7 @@ async def execute_python(
     Execute Python code in a secure, isolated environment.
     The code is allowed to write to the current directory of the isolated environment.
     Any files must be written to `output` sub-directory of the current directory to be returned.
-    You can also use it to run CLI tools, such as Linux tools and gcloud CLI.
+    You can also use it to run CLI tools, such as Linux tools and or git.
 
     Args:
         code: The Python code to execute.
