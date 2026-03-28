@@ -50,8 +50,8 @@ class SandboxWrapper:
         mount_paths: List[str] = [],
         env_vars: Dict[str, str] = {},
         time_limit: int = 60,
-        max_memory: int = 512, # MB - note: runsc might not enforce this directly without cgroups
-        max_output_size: int = 256, # MB
+        max_memory: int = 1024, # MB - note: runsc might not enforce this directly without cgroups
+        max_output_size: int = 1024, # MB
     ) -> asyncio.subprocess.Process:
         """
         Runs a command in a runsc sandbox using a one-shot OCI bundle.
@@ -211,6 +211,13 @@ class SandboxWrapper:
             "type": "bind",
             "source": "/dev/null",
             "options": ["rbind", "rw"]
+        })
+        # Temp dir
+        mounts.append({
+            "destination": "/tmp",
+            "type": "tmpfs",
+            "source": "tmpfs",
+            "options": ["nosuid", "strictatime", "mode=755", "size=256m"]
         })
 
         # Mount extra paths (like RO templates)

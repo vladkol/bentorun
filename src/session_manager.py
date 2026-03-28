@@ -22,7 +22,7 @@ class Session:
         self.venv_dir = self.workspace_dir / "venv"
         self.workspace_dir = Path(f"/tmp/session_{session_id}")
         self.venv_dir = self.workspace_dir / "venv"
-        self.temp_dir = self.workspace_dir / "tmp"
+        self.temp_dir = Path("/tmp")
         self.output_dir = self.workspace_dir / "output"
         self.session_output_files = {}
         self.last_active = time.time()
@@ -167,7 +167,7 @@ google.auth.default = __mock_default
                 cmd=cmd,
                 workspace_path=str(self.workspace_dir),
                 env_vars=env_variables,
-                mount_paths=[str(TEMPLATE_VENV_PATH)],
+                mount_paths=[str("/opt")],
                 time_limit=60
             )
 

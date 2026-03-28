@@ -15,6 +15,7 @@ matplotlib
 numpy
 pandas
 pillow
+pip
 pydantic
 PyPDF2
 python-dateutil
